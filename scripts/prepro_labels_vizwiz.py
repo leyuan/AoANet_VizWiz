@@ -13,13 +13,13 @@ Output: a json file and an hdf5 file
 The hdf5 file contains several fields:
 /images is (N,3,256,256) uint8 array of raw image data in RGB format
 /labels is (M,max_length) uint32 array of encoded labels, zero padded
-/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the 
+/label_start_ix and /label_end_ix are (N,) uint32 arrays of pointers to the
   first and last indices (in range 1..M) of labels for each image
 /label_length stores the length of the sequence for each of the M sequences
 
 The json file has a dict that contains:
 - an 'ix_to_word' field storing the vocab in form {ix:'word'}, where ix is 1-indexed
-- an 'images' field that is a list holding auxiliary information for each image, 
+- an 'images' field that is a list holding auxiliary information for each image,
   such as in particular the 'split' it was assigned to.
 """
 
@@ -61,7 +61,7 @@ def split_sentence(sentence):
       toks += list(word)
     else:
       toks.append(word)
-  # Remove '.' from the end of the sentence - 
+  # Remove '.' from the end of the sentence -
   # this is EOS token that will be populated by data layer
   if toks[-1] != '.':
     return toks
@@ -150,9 +150,9 @@ def build_vocab(params, data_split, base_vocab=None):
   return vocabulary
 
 def encode_captions(params, data_split, wtoi):
-  """ 
+  """
   encode all captions into one large array, which will be 1-indexed.
-  also produces label_start_ix and label_end_ix which store 1-indexed 
+  also produces label_start_ix and label_end_ix which store 1-indexed
   and inclusive (Lua-style) pointers to the first and last caption for
   each image in the dataset.
   """
@@ -178,7 +178,7 @@ def encode_captions(params, data_split, wtoi):
   counter = 1
   img_counter = 0
   imgInfo = []
-  
+
   for dataset in data_split:
     annFile='%s/%s.json' % (VizWiz_ANN_PATH, dataset)
     coco = COCO(annFile)
@@ -214,7 +214,7 @@ def encode_captions(params, data_split, wtoi):
       img_counter += 1
       counter += n
       imgInfo.append(jimg)
-  
+
   L = np.concatenate(label_arrays, axis=0) # put all the labels together
   assert L.shape[0] == M, 'lengths don\'t match? that\'s weird'
   assert np.all(label_length > 0), 'error: some caption had no words?'
@@ -224,11 +224,11 @@ def encode_captions(params, data_split, wtoi):
 
 def main(params):
   seed(123) # make reproducible
-  
+
   # create the vocab
   vocab = build_vocab(params, ['train', 'val'])
   itow = {i+1:w for i,w in enumerate(vocab)} # a 1-indexed vocab translation table
-  wtoi = {w:i+1 for i,w in enumerate(vocab)} # inverse table 
+  wtoi = {w:i+1 for i,w in enumerate(vocab)} # inverse table
   # encode captions in large arrays, ready to ship to hdf5 file
   N, L, label_start_ix, label_end_ix, label_length, imgInfo = encode_captions(params, ['train', 'val', 'test'], wtoi)
   # create output h5 file
@@ -241,15 +241,15 @@ def main(params):
   # create output json file
   out = {}
   out['ix_to_word'] = itow # encode the (1-indexed) vocab
-  out['images'] = imgInfo  
+  out['images'] = imgInfo
   json.dump(out, open(params['output_json']+'.json', 'w'))
   print('wrote ', params['output_json']+'.json')
 
 
-  # create the vocab integrating MSCOCO 
+  # create the vocab integrating MSCOCO
   vocab = build_vocab(params, ['train', 'val'], base_vocab=COCO_TRAIN_VOCAB_PATH)
   itow = {i+1:w for i,w in enumerate(vocab)} # a 1-indexed vocab translation table
-  wtoi = {w:i+1 for i,w in enumerate(vocab)} # inverse table 
+  wtoi = {w:i+1 for i,w in enumerate(vocab)} # inverse table
   # encode captions in large arrays, ready to ship to hdf5 file
   N, L, label_start_ix, label_end_ix, label_length, imgInfo = encode_captions(params, ['train', 'val', 'test'], wtoi)
   # create output h5 file
@@ -262,7 +262,7 @@ def main(params):
   # create output json file
   out = {}
   out['ix_to_word'] = itow # encode the (1-indexed) vocab
-  out['images'] = imgInfo  
+  out['images'] = imgInfo
   json.dump(out, open(params['output_json']+'_withCOCO.json', 'w'))
   print('wrote ', params['output_json']+'_withCOCO.json')
 
@@ -276,7 +276,7 @@ if __name__ == "__main__":
   parser.add_argument('--images_root', default='', help='root location in which images are stored, to be prepended to file_path in input json')
 
   # options
-  parser.add_argument('--max_length', default=16, type=int, help='max length of a caption, in number of words. captions longer than this get clipped.')
+  parser.add_argument('--max_length', default=25, type=int, help='max length of a caption, in number of words. captions longer than this get clipped.')
   parser.add_argument('--word_count_threshold', default=5, type=int, help='only words that occur more than this number of times will be put in vocab')
 
   args = parser.parse_args()

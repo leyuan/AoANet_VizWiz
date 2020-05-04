@@ -38,11 +38,11 @@ def train(opt):
     if opt.use_box: opt.att_feat_size = opt.att_feat_size + 5
 
     acc_steps = getattr(opt, 'acc_steps', 1)
-        
+
     loader = DataLoader(opt)
     opt.vocab_size = loader.vocab_size
     opt.seq_length = loader.seq_length
-
+    # import pdb; pdb.set_trace()
     tb_summary_writer = tb and tb.SummaryWriter(opt.checkpoint_path)
 
     infos = {}
@@ -122,6 +122,15 @@ def train(opt):
             with open(os.path.join(opt.checkpoint_path, 'histories_'+opt.id+'%s.pkl' %(append)), 'wb') as f:
                 utils.pickle_dump(histories, f)
 
+    # ### EVAL FIRST
+    cider_scorer = init_scorer(opt.cached_tokens)
+    # eval_kwargs = {'split': 'val',
+    #                 'dataset': opt.input_json,
+    #                 'num_images': 1}
+    # eval_kwargs.update(vars(opt))
+    # val_loss, predictions, lang_stats = eval_utils.eval_split(dp_model, lw_model.crit, loader, eval_kwargs, cider_scorer)
+    # ### EVAL END
+
     try:
         while True:
             if epoch_done:
@@ -148,7 +157,7 @@ def train(opt):
                     sc_flag = False
 
                 epoch_done = False
-            
+
             start = time.time()
             if (opt.use_warmup == 1) and (iteration < opt.noamopt_warmup):
                 opt.current_lr = opt.learning_rate * (iteration+1) / opt.noamopt_warmup
@@ -159,7 +168,7 @@ def train(opt):
 
             if (iteration % acc_steps == 0):
                 optimizer.zero_grad()
-            
+
             torch.cuda.synchronize()
             start = time.time()
             tmp = [data['fc_feats'], data['att_feats'], data['labels'], data['masks'], data['att_masks']]
@@ -212,16 +221,16 @@ def train(opt):
             infos['epoch'] = epoch
             infos['iterators'] = loader.iterators
             infos['split_ix'] = loader.split_ix
-            
+
             # make evaluation on validation set, and save model
             if (iteration % opt.save_checkpoint_every == 0):
                 # eval model
-                eval_kwargs = {'split': 'train',
+                eval_kwargs = {'split': 'val',
                                 'dataset': opt.input_json,
-                                'num_images': 1}
+                                'num_images': 500}
                 eval_kwargs.update(vars(opt))
                 val_loss, predictions, lang_stats = eval_utils.eval_split(
-                    dp_model, lw_model.crit, loader, eval_kwargs)
+                    dp_model, lw_model.crit, loader, eval_kwargs, cider_scorer)
 
                 if opt.reduce_on_plateau:
                     if lang_stats is not None and 'CIDEr' in lang_stats:

@@ -14,6 +14,17 @@ import time
 import os
 import sys
 import misc.utils as utils
+# sys.path.append('vizwiz-caption')
+# from vizwiz_api.vizwiz import VizWiz
+# from vizwiz_eval_cap.eval import VizWizEvalCap
+
+import pandas as pd
+annFile = '/shared/vizwiz2020/leyuan/AoANet_VizWiz/data/val.json'
+yt = json.load(open(annFile, 'r'))
+yt = pd.DataFrame(yt['annotations'])
+import pdb
+from collections import defaultdict
+
 
 bad_endings = ['a','an','the','in','for','at','of','with','before','after','on','upon','near','to','is','are','am']
 bad_endings += ['the']
@@ -25,7 +36,11 @@ def count_bad(sen):
     else:
         return 0
 
+def language_eval_viz(dataset, preds, model_id, split):
+    pass
+
 def language_eval(dataset, preds, model_id, split):
+    # import pdb; pdb.set_trace()
     import sys
     sys.path.append("coco-caption")
     if 'coco' in dataset:
@@ -65,7 +80,7 @@ def language_eval(dataset, preds, model_id, split):
     for p in preds_filt:
         image_id, caption = p['image_id'], p['caption']
         imgToEval[image_id]['caption'] = caption
-    
+
     out['bad_count_rate'] = sum([count_bad(_['caption']) for _ in preds_filt]) / float(len(preds_filt))
     outfile_path = os.path.join('eval_results/', model_id + '_' + split + '.json')
     with open(outfile_path, 'w') as outfile:
@@ -73,7 +88,7 @@ def language_eval(dataset, preds, model_id, split):
 
     return out
 
-def eval_split(model, crit, loader, eval_kwargs={}):
+def eval_split(model, crit, loader, eval_kwargs={}, scorer=None):
     verbose = eval_kwargs.get('verbose', True)
     verbose_beam = eval_kwargs.get('verbose_beam', 1)
     verbose_loss = eval_kwargs.get('verbose_loss', 1)
@@ -95,6 +110,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
     loss_sum = 0
     loss_evals = 1e-8
     predictions = []
+    scores = []
     while True:
         data = loader.get_batch(split)
         n = n + loader.batch_size
@@ -112,7 +128,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
 
         # forward the model to also get generated samples for each image
         # Only leave one feature for each image, in case duplicate sample
-        tmp = [data['fc_feats'][np.arange(loader.batch_size) * loader.seq_per_img], 
+        tmp = [data['fc_feats'][np.arange(loader.batch_size) * loader.seq_per_img],
             data['att_feats'][np.arange(loader.batch_size) * loader.seq_per_img],
             data['att_masks'][np.arange(loader.batch_size) * loader.seq_per_img] if data['att_masks'] is not None else None]
         tmp = [_.cuda() if _ is not None else _ for _ in tmp]
@@ -120,7 +136,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         # forward the model to also get generated samples for each image
         with torch.no_grad():
             seq = model(fc_feats, att_feats, att_masks, opt=eval_kwargs, mode='sample')[0].data
-        
+        # pdb.set_trace()
         # Print beam search
         if beam_size > 1 and verbose_beam:
             for i in range(loader.batch_size):
@@ -142,6 +158,16 @@ def eval_split(model, crit, loader, eval_kwargs={}):
             if verbose:
                 print('image %s: %s' %(entry['image_id'], entry['caption']))
 
+        if scorer:
+            pids = [p['image_id'] for p in predictions]
+            yt_ = yt[yt['image_id'].isin(pids)][['image_id', 'caption']]
+            gt = defaultdict(list)
+            for i, row in yt_.iterrows():
+                gt[row['image_id']].append(row['caption'])
+
+            cider_score, _ = scorer.compute_score(gt, predictions)
+            scores.append(cider_score)
+
         # if we wrapped around the split or used up val imgs budget then bail
         ix0 = data['bounds']['it_pos_now']
         ix1 = data['bounds']['it_max']
@@ -158,9 +184,12 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         if num_images >= 0 and n >= num_images:
             break
 
+    # pdb.set_trace()
     lang_stats = None
     if lang_eval == 1:
-        lang_stats = language_eval(dataset, predictions, eval_kwargs['id'], split)
+        # lang_stats = language_eval(dataset, predictions, eval_kwargs['id'], split)
+        scores = np.array(scores)
+        lang_stats = {'CIDEr': np.mean(scores)}
 
     # Switch back to training mode
     model.train()

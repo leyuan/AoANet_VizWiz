@@ -12,7 +12,7 @@ import sys
 sys.path.append("cider")
 from pyciderevalcap.ciderD.ciderD import CiderD
 sys.path.append("coco-caption")
-from pycocoevalcap.bleu.bleu import Bleu
+# from pycocoevalcap.bleu.bleu import Bleu
 
 CiderD_scorer = None
 Bleu_scorer = None
@@ -22,7 +22,8 @@ def init_scorer(cached_tokens):
     global CiderD_scorer
     CiderD_scorer = CiderD_scorer or CiderD(df=cached_tokens)
     global Bleu_scorer
-    Bleu_scorer = Bleu_scorer or Bleu(4)
+    # Bleu_scorer = Bleu_scorer or Bleu(4)
+    return CiderD_scorer
 
 def array_to_str(arr):
     out = ''
@@ -37,7 +38,7 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result, opt):
     seq_per_img = batch_size // len(data_gts)
 
     res = OrderedDict()
-    
+
     gen_result = gen_result.data.cpu().numpy()
     greedy_res = greedy_res.data.cpu().numpy()
     for i in range(batch_size):
@@ -57,12 +58,13 @@ def get_self_critical_reward(greedy_res, data_gts, gen_result, opt):
         print('Cider scores:', _)
     else:
         cider_scores = 0
-    if opt.bleu_reward_weight > 0:
-        _, bleu_scores = Bleu_scorer.compute_score(gts, res__)
-        bleu_scores = np.array(bleu_scores[3])
-        print('Bleu scores:', _[3])
-    else:
-        bleu_scores = 0
+    # if opt.bleu_reward_weight > 0:
+    #     _, bleu_scores = Bleu_scorer.compute_score(gts, res__)
+    #     bleu_scores = np.array(bleu_scores[3])
+    #     print('Bleu scores:', _[3])
+    # else:
+    #     bleu_scores = 0
+    bleu_scores = 0
     scores = opt.cider_reward_weight * cider_scores + opt.bleu_reward_weight * bleu_scores
 
     scores = scores[:batch_size] - scores[batch_size:]
